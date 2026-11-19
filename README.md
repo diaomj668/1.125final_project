@@ -1,5 +1,14 @@
 # Massachusetts Trip Planner
 
+## Live Demo
+
+**[Open Massachusetts Trip Planner](https://expenditure-lions-exclusion-quad.trycloudflare.com)**
+
+Open the link in a browser to try the planner. No installation or personal API key is required. Use the form or describe your trip in the chat, then click a recommended place to locate it on the map.
+
+This demonstration uses a temporary Cloudflare Tunnel. It is available only while the host computer, Docker containers and tunnel are running. The URL may change when the tunnel is recreated. If the demo is offline, follow the local setup instructions below.
+
+
 An individual MIT 1.125 Agentic Engineering project. It builds one-day or multi-day itineraries from a local Massachusetts business dataset, checks constraints, and displays stops on an interactive map. Natural-language requests are translated into structured parameters by Claude; Python selects and checks the itinerary.
 
 ## Current capabilities
