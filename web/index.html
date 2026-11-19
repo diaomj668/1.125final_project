@@ -585,10 +585,21 @@
     drawMap(data);
   }
 
+  function clearPlan() {
+    latestMapData = null; stopMarkers = {}; selectedStop = null; pendingStop = null;
+    if (stopInfoWindow) stopInfoWindow.close();
+    googleOverlays.forEach(function (item) { if (item.setMap) item.setMap(null); else item.map = null; });
+    googleOverlays = [];
+    if (layer) layer.clearLayers();
+    $("result").innerHTML = "";
+    $("mapStatus").textContent = "Build a plan to display its stops.";
+  }
   async function runPlan() {
+    if (!$("form").reportValidity()) return;
     var f = readForm();
     if (!f.interests.length) { $("summary").innerHTML = '<span class="pill bad"><b>Pick at least one interest.</b></span>'; return; }
     var go = $("go"); go.disabled = true;
+    clearPlan();
     $("summary").innerHTML = '<span class="pill"><b>Planning… calculating travel times</b></span>';
     try {
       var resp = await fetch("/api/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(f) });

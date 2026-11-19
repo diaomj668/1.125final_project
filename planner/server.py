@@ -204,6 +204,27 @@ def parse_clock(text):
 
 
 def build_request(body, geocoder, known_cities=()):
+    if not isinstance(body, dict):
+        raise HttpError(400, "Request must be a JSON object.")
+    for name in ("start_place", "end_place", "destination_city", "travel_mode", "day", "first_day", "trip_date"):
+        if body.get(name) is not None and not isinstance(body[name], str):
+            raise HttpError(400, f"{name} must be text.")
+    interests = body.get("interests", ["food", "culture"])
+    if not isinstance(interests, list) or any(not isinstance(i, str) for i in interests):
+        raise HttpError(400, "Interests must be a list of names.")
+    for name in ("days", "max_stops", "max_stops_per_day", "parking_buffer_min"):
+        if name in body:
+            value = body[name]
+            try:
+                if isinstance(value, bool) or float(value) != int(value): raise ValueError()
+            except (ValueError, TypeError, OverflowError):
+                raise HttpError(400, f"{name} must be a whole number.")
+    for name in ("budget", "budget_per_day"):
+        if name in body:
+            try:
+                if isinstance(body[name], bool) or not __import__("math").isfinite(float(body[name])) or float(body[name]) < 0: raise ValueError()
+            except (ValueError, TypeError, OverflowError):
+                raise HttpError(400, "Budget must be a finite nonnegative number.")
     from datetime import date, datetime, timedelta
     from zoneinfo import ZoneInfo
     day = body.get("day") or body.get("first_day") or "Saturday"
@@ -224,6 +245,7 @@ def build_request(body, geocoder, known_cities=()):
     if not 1 <= n_days <= 7:
         raise HttpError(400, "days must be between 1 and 7")
     interests = tuple(i for i in body.get("interests", ["food", "culture"]) if i in INTEREST_NAMES)
+    interests = tuple(dict.fromkeys(interests))
     if not interests:
         raise HttpError(400, "pick at least one interest")
     start_text = (body.get("start_place") or "").strip()
@@ -347,12 +369,22 @@ def make_handler(app):
             self.wfile.write(body)
 
         def _read_json(self):
-            length = int(self.headers.get("Content-Length", 0) or 0)
+            try:
+                length = int(self.headers.get("Content-Length", 0) or 0)
+            except ValueError:
+                raise HttpError(400, "Invalid request length.")
+            if length < 0:
+                raise HttpError(400, "Invalid request length.")
+            if length > 65536:
+                raise HttpError(413, "Request is too large (maximum 64 KB).")
             raw = self.rfile.read(length) if length else b"{}"
             try:
-                return json.loads(raw.decode("utf-8") or "{}")
-            except ValueError:
-                raise HttpError(400, "request body must be JSON")
+                body = json.loads(raw.decode("utf-8") or "{}")
+            except (ValueError, UnicodeError):
+                raise HttpError(400, "Request body must be valid JSON.")
+            if not isinstance(body, dict):
+                raise HttpError(400, "Request must be a JSON object.")
+            return body
 
         def do_GET(self):
             if self.path in ("/", "/index.html"):
@@ -373,7 +405,12 @@ def make_handler(app):
             try:
                 body = self._read_json()
                 if self.path == "/api/chat":
-                    message = (body.get("message") or "").strip()
+                    message = body.get("message", "")
+                    if not isinstance(message, str):
+                        raise HttpError(400, "Message must be text.")
+                    message = message.strip()
+                    if len(message) > 4000:
+                        raise HttpError(400, "Please keep trip descriptions under 4,000 characters.")
                     if not message:
                         raise HttpError(400, "type a request first")
                     if not LIMITER.allow("chat:" + self._client(), CHAT_PER_IP_PER_HOUR):
@@ -390,7 +427,7 @@ def make_handler(app):
             except HttpError as e:
                 self._send(e.status, {"error": str(e)})
             except Exception as e:  # report unexpected failures to the page instead of hanging
-                self._send(500, {"error": f"server error: {e}"})
+                self._send(500, {"error": "The server could not complete this request. Please try again."})
 
     return Handler
 
