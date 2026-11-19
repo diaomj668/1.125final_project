@@ -8,19 +8,19 @@
 <style>
   :root {
     --ink: #17203d; --muted: #667085; --line: #e4e7ef; --bg: #f5f6fa;
-    --card: #ffffff; --accent: #3654c9; --accent-2: #e8a33d; --accent-soft: #eef2ff;
+    --card: #ffffff; --accent: #0d7377; --accent-2: #e8a33d; --accent-soft: #e6f4f2;
     --ok: #1f8a5b; --bad: #c53030; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.06);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --ink: #e8ebf7; --muted: #9aa3b8; --line: #2a3150; --bg: #0f1424;
-      --card: #171d30; --accent: #8ea2ff; --accent-2: #f0b45a; --accent-soft: #1d2648;
+      --card: #171d30; --accent: #5fc4b8; --accent-2: #f0b45a; --accent-soft: #16322f;
       --ok: #6fd39a; --bad: #ff8a8a; --shadow: 0 8px 24px rgba(0,0,0,.35);
     }
   }
   :root[data-theme="dark"] {
     --ink: #e8ebf7; --muted: #9aa3b8; --line: #2a3150; --bg: #0f1424;
-    --card: #171d30; --accent: #8ea2ff; --accent-2: #f0b45a; --accent-soft: #1d2648;
+    --card: #171d30; --accent: #5fc4b8; --accent-2: #f0b45a; --accent-soft: #16322f;
     --ok: #6fd39a; --bad: #ff8a8a; --shadow: 0 8px 24px rgba(0,0,0,.35);
   }
   * { box-sizing: border-box; }
@@ -28,7 +28,7 @@
   body { background: var(--bg); color: var(--ink);
          font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
 
-  .hero { background: linear-gradient(135deg, #2c3f9e 0%, #3654c9 55%, #5b7cfa 100%); color: #fff;
+  .hero { background: linear-gradient(135deg, #0f4c4a 0%, #0d7377 55%, #2a9d8f 100%); color: #fff;
           padding: 28px 20px 84px; }
   .hero-inner { max-width: 1180px; margin: 0 auto; }
   .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; opacity: .8; margin: 0 0 6px; }
@@ -58,7 +58,7 @@
   .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
   .hint { font-size: 13px; color: var(--muted); }
   button.go { font: inherit; font-weight: 650; color: #fff; background: var(--accent); border: none; border-radius: 10px;
-              padding: 11px 22px; cursor: pointer; box-shadow: 0 6px 16px rgba(54,84,201,.28); }
+              padding: 11px 22px; cursor: pointer; box-shadow: 0 6px 16px rgba(13,115,119,.28); }
   button.go:hover { filter: brightness(1.06); }
 
   .summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 14px; align-items: center; }
@@ -400,7 +400,7 @@ window.PLACES = [{"id":"0x89e3706a62ba248f:0xdd2878d145d53400","name":"La Sanghi
       m.on("click", function () { highlight(i); });
       markers[i] = m;
     });
-    if (pts.length > 1) L.polyline(pts, { color: "#3654c9", weight: 4, opacity: 0.75, dashArray: "6 8" }).addTo(layer);
+    if (pts.length > 1) L.polyline(pts, { color: "#0d7377", weight: 4, opacity: 0.75, dashArray: "6 8" }).addTo(layer);
     map.fitBounds(L.latLngBounds(pts).pad(0.25), { maxZoom: 14 });
     setTimeout(function () { map.invalidateSize(); }, 0);
   }
