@@ -1,0 +1,20 @@
+services:
+  planner:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY before starting}
+      GOOGLE_MAPS_BROWSER_KEY: ${GOOGLE_MAPS_BROWSER_KEY:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      CHAT_DAILY_CAP: "50"
+      CHAT_PER_IP_PER_HOUR: "10"
+    restart: unless-stopped
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://planner:8000
+    depends_on:
+      - planner
+    profiles: [share]
+    restart: unless-stopped

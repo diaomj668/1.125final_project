@@ -18,7 +18,10 @@ def parse_clock(text):
     m = _CLOCK_RE.match(text)
     if not m:
         return None
-    hour = int(m.group(1)) % 12
+    raw_hour = int(m.group(1))
+    if not 1 <= raw_hour <= 12:
+        return None
+    hour = raw_hour % 12
     minute = int(m.group(2) or 0)
     if hour > 12 or minute > 59:
         return None
@@ -41,7 +44,18 @@ def parse_day_hours(text):
         bits = _DASH_RE.split(piece.strip())
         if len(bits) != 2:
             return None
-        opens, closes = parse_clock(bits[0]), parse_clock(bits[1])
+        # Infer a missing meridiem only when both endpoints clearly share it,
+        # or noon is the start (e.g. 12–5PM). Do not guess ambiguous 9–5PM.
+        left, right = bits[0], bits[1]
+        if not re.search(r"[AP]M", left, re.I) and re.search(r"[AP]M", right, re.I):
+            match = re.fullmatch(r"\s*(\d{1,2})(?::(\d{2}))?\s*", left)
+            right_match = _CLOCK_RE.match(right)
+            if match and right_match:
+                lh, rh = int(match[1]), int(right_match[1])
+                suffix = right_match[3].upper()
+                if (lh <= rh and lh != 12) or (lh == 12 and suffix == "PM"):
+                    left += suffix
+        opens, closes = parse_clock(left), parse_clock(right)
         if opens is None or closes is None:
             return None
         if closes <= opens:  # e.g. 6PM–2AM closes after midnight

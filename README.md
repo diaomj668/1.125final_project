@@ -1,145 +1,85 @@
-# Massachusetts Trip Planner (1.125 term project, midpoint version)
+# Massachusetts Trip Planner
 
-A one-day itinerary planner for Massachusetts. You choose a day, interests and a budget. The planner
-picks places from real business records, and an independent checker verifies every stop against
-its record. If a check fails, the plan is rebuilt without that place.
+An individual MIT 1.125 Agentic Engineering project. It builds one-day or multi-day itineraries from a local Massachusetts business dataset, checks constraints, and displays stops on an interactive map. Natural-language requests are translated into structured parameters by Claude; Python selects and checks the itinerary.
 
-**Status (midpoint):** version 1 is working: one-day itineraries with hours, travel-time and
-budget checks, plus a 20-request evaluation. Not done yet: taste ranking, multi-day plans,
-re-planning when a stop closes, and LLM-written plan text. See [Roadmap](#roadmap).
+## Current capabilities
 
-## How it works
-
-```
- request (day, interests, budget, hours)
-        │
-        ▼
- planner/planner.py   greedy search over places that are open for the whole visit
-        │
-        ▼
- planner/checker.py   re-checks every stop against the raw record (hours, travel, budget, links)
-        │
-   pass ├──► plan with per-stop record links
-   fail └──► planner/agent.py excludes the failing place and rebuilds (up to 5 attempts)
-```
-
-| File | Role |
-|---|---|
-| `planner/data.py` | Loads `meta-Massachusetts.json.gz`, drops permanently closed, out-of-state and bad-coordinate records |
-| `planner/hours.py` | Parses hours text such as `5:30AM–1PM`, `Closed`, `Open 24 hours`; finds the earliest visit start |
-| `planner/geo.py` | Haversine distance × 1.3 detour factor at 25 km/h to estimate travel time |
-| `planner/interests.py` | Maps interests (food, culture, outdoors, shopping, nightlife) to Google category names |
-| `planner/planner.py` | Builds the itinerary; spreads stops across interests; keeps cost under budget |
-| `planner/checker.py` | Independent verification; returns a list of rule violations |
-| `planner/agent.py` | Plan → check → rebuild loop, with a log of every attempt |
-| `planner/cli.py` | Command-line interface |
-| `scripts/evaluate.py` | Runs 20 fixed requests and writes `evaluation/results.md` |
-| `tests/test_planner.py` | Unit tests for hours parsing, planning and checking |
-
-### Checker rules
-
-`record_exists`, `traceability` (the stop's link matches the record), `duplicate`, `hours_unknown`,
-`open_hours` (the whole visit fits inside the recorded hours for the trip day), `within_day`,
-`duration`, `travel_time`, `budget`.
-
-### Design choices
-
-- **Places with no recorded hours for the trip day are never planned.** Without hours we cannot
-  verify a stop, so we do not guess.
-- **Prices are estimates.** Price tiers map to fixed USD values (`$`=12, `$$`=25, `$$$`=50, `$$$$`=90).
-  Places with no price get a default of $15. The output labels which estimate was used. Only about
-  20% of records have a price.
-- **Travel time is an estimate.** It is straight-line distance × 1.3 at 25 km/h, not a routing API.
-- **Quality filter:** rating ≥ 4.0 and at least 5 reviews, so the planner does not pick
-  low-information places.
-- **Data age:** the snapshot is from September 2021, so some places may have closed since.
-
-## Data
-
-Source: the Google Local dataset from the UCSD McAuley lab (Massachusetts business metadata file).
-Put the file here (not included in the repository because of its size):
-
-```
-data/raw/meta-Massachusetts.json.gz
-```
-
-The reviews file (`review-Massachusetts_10.json.gz`) is not used in version 1. It is planned for
-taste ranking.
-
-Dataset citations: the Google Local data is from the McAuley lab (UCSD). Related work cited in the
-proposal: UCTopic (ACL 2022) and Personalized Showcases (SIGIR 2023).
-
-Data cleaning on the 92,520 records:
-
-| Step | Removed |
-|---|---|
-| Permanently closed (`state` field) | 4,925 |
-| Address names a state other than Massachusetts | 31 |
-| Coordinates outside Massachusetts (placeholder or bad geocodes) | 10 |
-| **Kept** | **87,554** |
-
-The proposal reported 87,588 after removing 7 out-of-state records. The rules here are stricter,
-so the count is slightly lower.
+- Dataset-only recommendations with record links and IDs; no LLM-generated venues.
+- City constraints, five interest groups, popularity/rating/distance ranking, and daily spending estimates.
+- Up to seven consecutive days and 1–12 stops per day; records are not repeated across days.
+- Breakfast/lunch/dinner windows, category matching and one meal of each type per day when feasible and Food is selected.
+- Recorded opening-hour, route-time, budget, meal, quality, city, radius and duplicate checks with a rebuild log.
+- Bounded route reordering within sightseeing blocks; accepts only feasible improvements in total travel time. Not a global optimum.
+- Walking, driving and transit through Google Routes when configured; labelled walking/OSRM fallbacks. Transit fails explicitly without Google routing.
+- Google Maps stop markers, clickable cards, per-leg navigation links, and daily travel/wait totals.
 
 ## Install and run
 
-Requirements: Python 3.10 or newer. No third-party packages are needed.
+Use Python 3.10 or newer. Runtime Python code uses only the standard library. Docker uses Python 3.12. Internet access is needed for geocoding and optional routing/maps/chat.
+
+Place the UCSD Google Local **Massachusetts business metadata** file at `data/raw/meta-Massachusetts.json.gz`. Source: https://mcauleylab.ucsd.edu/public_datasets/gdrive/googlelocal/ . The deployment copy includes the metadata file; the 10-core review text file is not used by the current application. This repository should document and respect the source dataset's terms.
 
 ```bash
-cd 1.125final_project
-python -m planner --data data/raw --day Saturday --interests food,culture --budget 80
+python3 -m planner.server --data data/raw
 ```
 
-Options: `--day`, `--interests` (comma list), `--budget` (USD per person), `--start` and `--end`
-(24-hour HH:MM), `--max-stops`, `--anchor lat,lon` (default: Boston Common), `--radius-km`,
-`--json plan.json`.
+Open `http://127.0.0.1:8000`. Fill the form without a Claude key. Configure environment variables for optional services:
 
-### Web page
+| Variable | Purpose |
+|---|---|
+| ANTHROPIC_API_KEY | Server-side Claude chat requests |
+| ANTHROPIC_MODEL | Account-supported model ID; current project default is claude-sonnet-5-5 |
+| ANTHROPIC_BASE_URL | Optional compatible Anthropic endpoint |
+| GOOGLE_MAPS_API_KEY | Backend Google Routes key |
+| GOOGLE_MAPS_BROWSER_KEY | Separate Maps JavaScript website-restricted key; exposed to the browser by design |
+| HOST / PORT | Listener settings; defaults 127.0.0.1 / 8000 |
 
-`web/index.html` is a single file you can open in a browser. It contains the same planning and
-checking rules in JavaScript, plus the Boston-area place data (5,754 places, 2.3 MB), so it needs
-no server. The map uses Leaflet (cdnjs) and OpenStreetMap tiles, so it needs an internet connection; the plan itself works offline. Open it directly, or serve the folder with `python -m http.server` and visit
-`http://127.0.0.1:8000`. The page covers Boston and a 20 km radius only. To rebuild it after changing
-the data or rules:
+See [deployment instructions](DEPLOYMENT.md) for Docker, secret input helpers and the temporary public tunnel.
+
+A legacy CLI is also available; it supports fewer options than the web application:
 
 ```bash
-python scripts/export_web_data.py --data data/raw
+python3 -m planner --data data/raw --day Saturday --days 2 --interests food,culture --budget 80 --travel straight
+python3 -m unittest discover -s tests -v
+python3 scripts/evaluate.py --data data/raw
 ```
 
-This writes `web/index.html` from `web/index.template.html`. Check the JavaScript against the Python
-planner after any rule change: for the same request, both should give the same stops and times.
+The evaluation uses local distance estimates without paid API calls. It is not a live Google routing or chatbot-baseline benchmark.
 
-Tests and evaluation:
+## Architecture and authorship
 
-```bash
-python -m unittest discover -s tests -v
-python scripts/evaluate.py --data data/raw
-```
+| Module | Responsibility |
+|---|---|
+| planner/data.py | Load and clean metadata; 87,554 of 92,520 records retained under current rules |
+| planner/interests.py | Explicit category mapping, visit lengths and meal compatibility |
+| planner/planner.py | Candidate scoring and constraint-aware greedy construction |
+| planner/optimizer.py | Bounded feasible route-order improvement |
+| planner/checker.py | Recheck itinerary against catalog and request constraints |
+| planner/agent.py | Build/check/rebuild orchestration and multi-day duplicate exclusion |
+| planner/routing.py | Google Routes, OSRM and labelled fallback estimates |
+| planner/server.py | HTTP endpoints, geocoding and Claude parameter extraction |
+| web/index.html | Form, chat, cards and Google/Leaflet maps |
 
-## Evaluation (midpoint)
+This is a deterministic planner/checker architecture with LLM-assisted parameter extraction, not an autonomous LLM that searches and writes the entire itinerary. Custom implementation and debugging were developed with substantial OpenAI Codex assistance. The student is responsible for reviewing, understanding and explaining all submitted code. No third-party algorithm implementation is claimed as original research.
 
-Results are in [`evaluation/results.md`](evaluation/results.md). Summary on the 20 fixed requests:
+External resources: UCSD McAuley Lab Google Local data; Anthropic Claude API; Google Routes and Maps JavaScript APIs; OpenStreetMap Nominatim and tiles; OSRM demo server; Leaflet 1.9.4 through cdnjs; Python and Docker; Cloudflare Tunnel. Google and Anthropic credentials and billing are user-provided. Links: https://www.anthropic.com/ ; https://developers.google.com/maps/documentation ; https://www.openstreetmap.org/ ; https://project-osrm.org/ ; https://leafletjs.com/ ; https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/ . UCTopic and Personalized Showcases are proposal background references, not algorithms implemented here. pandas was proposed but is not a runtime dependency.
 
-- 20 of 20 requests produced a checked one-day plan.
-- 0 time clashes, 0 hours/record violations, 0 over-budget plans.
-- No plan needed a rebuild, because the planner only uses places that are open for the whole visit.
+## Evidence and limitations
 
-Caveat: this result is partly by construction. The planner already filters for hours and budget, so
-the checker rarely fails here. The unit tests check that the checker does catch bad plans (for
-example a visit outside opening hours, an unknown place, or an over-budget plan).
+See [evaluation results](evaluation/results.md) and [requirements audit](REQUIREMENTS_AUDIT.md). Existing tests cover planning/checking, meals, city boundaries by address text, route direction, travel modes, budget, order improvement and parsing. They do not prove live availability, globally optimal routes, or current prices.
 
-Not yet done: the proposal planned a comparison with a plain chatbot on the same 20 requests. That
-needs an LLM API key and is planned for the final version.
+- Metadata is a September 2021 snapshot; opening hours, closures and prices are not live verified.
+- Prices are explicit assumptions: $ → 12, $$ → 25, $$$ → 50, $$$$ → 90 USD per person; missing price → 15. No current menu, admission, tax, tip, transit or parking charges are included.
+- Meals are optional Food stops. Limited stops/budget/hours may omit meals. Visit lengths and meal windows are fixed defaults.
+- Multiple days are planned sequentially, each from the same starting point. There is no joint geographic clustering or hotel/continuous-trip model.
+- City matching uses address text; search radius is 20 km. Walking stop legs are capped at 45 minutes; the separate final endpoint leg can exceed that cap if the day deadline permits it.
+- Review-text taste personalization and user-triggered remaining-day replanning are not implemented.
+- Only an offline planner/checker evaluation exists; the proposed plain-chatbot comparison is not completed.
+- Python's development HTTP server, in-memory rate limits and temporary tunnel are demonstration infrastructure, not a hardened production service.
+
 
 ## Roadmap
 
-- **Final:** taste ranking using review text, multi-day plans (hours checked for each day),
-  re-planning when a stop closes, LLM-drafted plan text (the proposal's "Agent" step), and the
-  chatbot baseline comparison.
-- **Out of scope:** booking, payment and live availability.
+Completed: multi-day dataset-grounded planning, meal windows, city restrictions, Google route/map integration, independent checks, bounded route improvement and English documentation.
 
-## External resources
-
-- Google Local business metadata, UCSD McAuley lab (Massachusetts file). Used for places, categories,
-  hours, prices and ratings.
-- Python standard library only (`gzip`, `json`, `dataclasses`, `math`, `argparse`, `unittest`).
+Remaining: review-text taste personalization; remaining-day replanning after a closure; a matched plain-chatbot baseline on the 20 evaluation requests; joint multi-day geographic clustering; production hosting and persistent API spending controls. Proposal scope changes are documented in REQUIREMENTS_AUDIT.md.

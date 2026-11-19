@@ -86,3 +86,9 @@ def load_businesses(data_dir="data/raw"):
             businesses.append(_business_from_record(r))
     stats["kept"] = len(businesses)
     return businesses, stats
+
+
+def address_city(address):
+    """Municipality explicitly recorded immediately before the Massachusetts state field."""
+    match = re.search(r",\s*([^,]+),\s*(?:MA\b|Massachusetts\b)", address or "", re.IGNORECASE)
+    return match.group(1).strip() if match else ""

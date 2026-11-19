@@ -1,0 +1,6 @@
+.git
+__pycache__
+*.pyc
+.env
+.env.*
+data/route_cache.json

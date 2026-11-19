@@ -6,10 +6,11 @@
 The loop stops after max_attempts. The log records every attempt, so the
 checker output can be shown to the user.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from .checker import check_itinerary
-from .planner import build_plan
+from .planner import DAYS, build_plan
+from .optimizer import improve_route
 
 
 @dataclass
@@ -19,16 +20,40 @@ class PlanResult:
     excluded: frozenset = frozenset()
 
 
-def plan_with_checks(businesses, catalog, req, max_attempts=5):
-    excluded = set()
+def trip_days(start_day, n_days):
+    """Consecutive weekday names starting at start_day, wrapping after Sunday."""
+    i = DAYS.index(start_day)
+    return [DAYS[(i + k) % len(DAYS)] for k in range(n_days)]
+
+
+def plan_trip(businesses, catalog, req, n_days, max_attempts=5, router=None):
+    """Plan n_days in a row, starting on req.day. Each day uses req.budget and
+    req.max_stops. A place is used at most once across the whole trip.
+    Returns a list of (day, PlanResult)."""
+    used = set()
+    out = []
+    for offset, day in enumerate(trip_days(req.day, n_days)):
+        from datetime import date, timedelta
+        trip_date = (date.fromisoformat(req.trip_date) + timedelta(days=offset)).isoformat() if req.trip_date else None
+        result = plan_with_checks(businesses, catalog, replace(req, day=day, trip_date=trip_date),
+                                  max_attempts=max_attempts, initial_exclude=frozenset(used), router=router)
+        out.append((day, result))
+        if result.itinerary is not None:
+            used |= {s.business.gmap_id for s in result.itinerary.stops}
+    return out
+
+
+def plan_with_checks(businesses, catalog, req, max_attempts=5, initial_exclude=frozenset(), router=None):
+    excluded = set(initial_exclude)
     attempts = []
     for n in range(1, max_attempts + 1):
-        itin = build_plan(businesses, req, exclude=frozenset(excluded))
+        itin = build_plan(businesses, req, exclude=frozenset(excluded), router=router)
         if not itin.stops:
             attempts.append({"attempt": n, "stops": 0, "violations": [],
                              "note": "no feasible stops with these constraints"})
             break
-        violations = check_itinerary(itin, catalog)
+        itin = improve_route(itin, router)
+        violations = check_itinerary(itin, catalog, router)
         attempts.append({"attempt": n, "stops": len(itin.stops), "violations": violations})
         if not violations:
             return PlanResult(itin, attempts, frozenset(excluded))

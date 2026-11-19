@@ -2,7 +2,7 @@
 
 Targets from the proposal:
   - 0 time clashes in final plans (code check)
-  - 0 made-up hours or prices (every stop is checked against its record)
+  - 0 record/hour violations; dollar costs remain explicitly labelled assumptions
 
 Usage:
     python scripts/evaluate.py --data data/raw
@@ -101,7 +101,9 @@ def main():
         )
     lines += [
         "",
-        "Not yet done: a plain-chatbot baseline on the same 20 requests (needs an LLM API key).",
+        "Method: offline planner/checker evaluation using straight-line driving estimates; no live Google routing, geocoding or LLM calls.",
+        "Dollar costs are explicit price-tier assumptions, not factual menu or admission prices. These checks do not establish current operating hours or optimal routes.",
+        "Not yet done: a plain-chatbot baseline on the same 20 requests.",
         "",
     ]
     out = Path(args.out)

@@ -42,3 +42,18 @@ def interests_for(business, wanted):
 
 def visit_minutes(interest):
     return VISIT_MINUTES[interest]
+
+
+MEAL_WINDOWS = (("Breakfast", 7*60, 10*60+30), ("Lunch", 11*60+30, 14*60+30), ("Dinner", 17*60+30, 20*60+30))
+BREAKFAST_CATEGORIES = {"breakfast restaurant", "brunch restaurant", "bakery", "bagel shop", "cafe", "coffee shop", "donut shop", "diner"}
+MAIN_MEAL_CATEGORIES = {"restaurant", "american restaurant", "italian restaurant", "pizza restaurant", "seafood restaurant", "chinese restaurant", "sandwich shop", "fast food restaurant", "bar & grill", "diner"}
+
+
+def meal_options(business, used_meals):
+    cats = {c.casefold() for c in business.categories}
+    for name, opening, closing in MEAL_WINDOWS:
+        if name in used_meals:
+            continue
+        allowed = BREAKFAST_CATEGORIES if name == "Breakfast" else MAIN_MEAL_CATEGORIES
+        if cats & allowed:
+            yield name, opening, closing
