@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Massachusetts Trip Planner</title>
+<style>
+  :root {
+    --ink: #1c2340; --muted: #6b7280; --line: #d9dde8; --bg: #f6f7fb;
+    --card: #ffffff; --accent: #3b4ca8; --warn: #b7791f; --ok: #2f855a; --bad: #c53030;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #e7e9f3; --muted: #9aa3b8; --line: #2f3650; --bg: #141827;
+      --card: #1d2236; --accent: #8fa0ff; --warn: #e0b35a; --ok: #6fd39a; --bad: #ff8a8a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e7e9f3; --muted: #9aa3b8; --line: #2f3650; --bg: #141827;
+    --card: #1d2236; --accent: #8fa0ff; --warn: #e0b35a; --ok: #6fd39a; --bad: #ff8a8a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  form, .panel, .stop { background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  form { padding: 16px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+  input, select, button { font: inherit; color: var(--ink); background: var(--bg);
+         border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 40px; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 0; grid-column: 1 / -1; }
+  legend { font-size: 14px; color: var(--muted); padding: 0 4px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 14px; }
+  .checks label { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+  button { background: var(--accent); color: #fff; border: none; cursor: pointer; font-weight: 600; }
+  .actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+  .note { font-size: 14px; color: var(--muted); margin: 14px 2px 0; }
+  .status { margin-top: 22px; font-size: 15px; }
+  .stop { padding: 14px 16px; margin-top: 12px; }
+  .stop-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .stop-name { font-weight: 650; font-size: 17px; }
+  .time { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 650; }
+  .tag { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--muted); }
+  .meta { color: var(--muted); font-size: 14px; margin-top: 6px; display: grid; gap: 2px; }
+  a { color: var(--accent); }
+  .panel { padding: 14px 16px; margin-top: 18px; }
+  .panel h2 { font-size: 16px; margin: 0 0 8px; }
+  .log { font: 13px/1.6 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; margin: 0; color: var(--ink); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .total { font-size: 18px; font-weight: 650; margin-top: 16px; }
+  .hidden { display: none; }
+  @media (max-width: 480px) { main { padding: 16px 12px 40px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Massachusetts Trip Planner</h1>
+  <p class="sub">One-day plan from real business records. Every stop is checked against its record.</p>
+
+  <form id="form">
+    <label>Day
+      <select id="day"></select>
+    </label>
+    <label>Budget (USD per person, estimate)
+      <input id="budget" type="number" min="0" step="5" value="80">
+    </label>
+    <label>Start
+      <input id="start" type="time" value="10:00">
+    </label>
+    <label>End
+      <input id="end" type="time" value="20:00">
+    </label>
+    <label>Max stops
+      <select id="maxStops"><option>2</option><option>3</option><option selected>4</option><option>5</option></select>
+    </label>
+    <fieldset>
+      <legend>Interests</legend>
+      <div class="checks" id="interests"></div>
+    </fieldset>
+    <div class="actions"><button type="submit">Build plan</button></div>
+  </form>
+  <p class="note">Start point: Boston Common. Travel time is estimated from straight-line distance. Prices are estimates; many places have none recorded. Data snapshot: September 2021.</p>
+
+  <div class="status" id="status"></div>
+  <div id="result"></div>
+</main>
+
+<script src="places.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ---- Settings shared with the Python planner (planner/planner.py, interests.py) ----
+  var INTEREST_CATEGORIES = {
+    food: ["Restaurant", "American restaurant", "Italian restaurant", "Pizza restaurant",
+      "Breakfast restaurant", "Seafood restaurant", "Chinese restaurant",
+      "Sandwich shop", "Bakery", "Bagel shop", "Ice cream shop", "Donut shop",
+      "Cafe", "Coffee shop"],
+    culture: ["Museum", "Art museum", "History museum", "Art gallery",
+      "Historical landmark", "Tourist attraction", "Library"],
+    outdoors: ["Park", "Beach", "Hiking area", "Nature preserve", "Garden", "Botanical garden"],
+    shopping: ["Clothing store", "Women's clothing store", "Men's clothing store", "Gift shop", "Shoe store"],
+    nightlife: ["Bar", "Bar & grill", "Brewery", "Cocktail bar", "Pub"]
+  };
+  var VISIT_MINUTES = { food: 60, culture: 90, outdoors: 60, shopping: 45, nightlife: 75 };
+  var PRICE_ESTIMATE = { "$": 12, "$$": 25, "$$$": 50, "$$$$": 90 };
+  var MISSING_PRICE = 15;
+  var ANCHOR = [42.3601, -71.0589];
+  var RADIUS_KM = 20, MIN_RATING = 4.0, MIN_REVIEWS = 5, MAX_ATTEMPTS = 5;
+  var DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  var INTEREST_NAMES = Object.keys(INTEREST_CATEGORIES);
+  var URL_PREFIX = "https://www.google.com/maps/place//data=!4m2!3m1!1s";
+  var URL_SUFFIX = "?authuser=-1&hl=en&gl=us";
+
+  // ---- Hours (planner/hours.py) ----
+  function parseClock(text) {
+    var m = /^\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*$/i.exec(text);
+    if (!m) return null;
+    var hour = parseInt(m[1], 10) % 12, minute = parseInt(m[2] || "0", 10);
+    if (hour > 12 || minute > 59) return null;
+    if (m[3].toUpperCase() === "PM") hour += 12;
+    return hour * 60 + minute;
+  }
+  function parseDayHours(text) {
+    if (text === undefined || text === null) return null;
+    var raw = String(text).trim();
+    if (raw.toLowerCase() === "closed") return "closed";
+    if (raw.toLowerCase() === "open 24 hours") return "always";
+    var intervals = [], pieces = raw.split(",");
+    for (var i = 0; i < pieces.length; i++) {
+      var bits = pieces[i].trim().split(/\s*[–—-]\s*/);
+      if (bits.length !== 2) return null;
+      var o = parseClock(bits[0]), c = parseClock(bits[1]);
+      if (o === null || c === null) return null;
+      if (c <= o) c += 24 * 60;
+      intervals.push([o, c]);
+    }
+    return intervals.length ? intervals : null;
+  }
+  function isOpen(parsed, start, end) {
+    if (parsed === "always") return true;
+    if (parsed === null || parsed === "closed") return false;
+    return parsed.some(function (iv) { return iv[0] <= start && end <= iv[1]; });
+  }
+  function earliestStart(parsed, arrival, duration) {
+    if (parsed === "always") return arrival;
+    if (parsed === null || parsed === "closed") return null;
+    var sorted = parsed.slice().sort(function (a, b) { return a[0] - b[0]; });
+    for (var i = 0; i < sorted.length; i++) {
+      var s = Math.max(arrival, sorted[i][0]);
+      if (s + duration <= sorted[i][1]) return s;
+    }
+    return null;
+  }
+
+  // ---- Geo (planner/geo.py) ----
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    var R = 6371.0, rad = Math.PI / 180;
+    var p1 = lat1 * rad, p2 = lat2 * rad, dp = p2 - p1, dl = (lon2 - lon1) * rad;
+    var a = Math.sin(dp / 2) * Math.sin(dp / 2) +
+            Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+  function travelMinutes(lat1, lon1, lat2, lon2) {
+    return haversineKm(lat1, lon1, lat2, lon2) * 1.3 / 25.0 * 60.0;
+  }
+
+  // ---- Interests and cost (planner/interests.py, planner/planner.py) ----
+  function interestsFor(place, wanted) {
+    var cats = place.cats.map(function (c) { return c.toLowerCase(); });
+    return wanted.filter(function (i) {
+      return INTEREST_CATEGORIES[i].some(function (c) { return cats.indexOf(c.toLowerCase()) !== -1; });
+    });
+  }
+  function estimateCost(place) {
+    if (PRICE_ESTIMATE.hasOwnProperty(place.price))
+      return { cost: PRICE_ESTIMATE[place.price], source: "price tier " + place.price + " (estimate)" };
+    return { cost: MISSING_PRICE, source: "no price recorded (default estimate)" };
+  }
+  function placeUrl(p) { return p.url || (URL_PREFIX + p.id + URL_SUFFIX); }
+
+  // ---- Planner (planner/planner.py build_plan) ----
+  function buildPlan(places, req, exclude) {
+    var pool = [];
+    places.forEach(function (p) {
+      if (exclude[p.id]) return;
+      if (p.rating < MIN_RATING || p.n < MIN_REVIEWS) return;
+      var matched = interestsFor(p, req.interests);
+      if (!matched.length) return;
+      var parsed = parseDayHours(p.hours[req.day]);
+      if (parsed === null) return;
+      if (haversineKm(req.anchor[0], req.anchor[1], p.lat, p.lon) > req.radiusKm) return;
+      pool.push({ p: p, matched: matched, parsed: parsed });
+    });
+
+    var stops = [], spent = 0, curLoc = req.anchor, curTime = req.startMin, used = {};
+    var counts = {}; req.interests.forEach(function (i) { counts[i] = 0; });
+    var cap = Math.ceil(req.maxStops / req.interests.length);
+
+    while (stops.length < req.maxStops) {
+      var best = null;
+      for (var k = 0; k < pool.length; k++) {
+        var c = pool[k], p = c.p;
+        if (used[p.id]) continue;
+        var open = c.matched.filter(function (i) { return counts[i] < cap; });
+        if (!open.length) continue;
+        var interest = open[0];
+        open.forEach(function (i) { if (counts[i] < counts[interest]) interest = i; });
+        var travel = Math.ceil(travelMinutes(curLoc[0], curLoc[1], p.lat, p.lon));
+        var arrival = curTime + travel, duration = VISIT_MINUTES[interest];
+        var start = earliestStart(c.parsed, arrival, duration);
+        if (start === null) continue;
+        var end = start + duration;
+        if (end > req.endMin) continue;
+        var price = estimateCost(p);
+        if (spent + price.cost > req.budget) continue;
+        var key = [start - curTime, -p.rating, -p.n, p.id];
+        if (best === null || keyLess(key, best.key))
+          best = { key: key, p: p, interest: interest, arrival: arrival, start: start, end: end,
+                   travel: travel, cost: price.cost, source: price.source };
+      }
+      if (best === null) break;
+      stops.push(best);
+      used[best.p.id] = true;
+      counts[best.interest] += 1;
+      spent += best.cost;
+      curLoc = [best.p.lat, best.p.lon];
+      curTime = best.end;
+    }
+    return stops;
+  }
+  function keyLess(a, b) {
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] === b[i]) continue;
+      return a[i] < b[i];
+    }
+    return false;
+  }
+
+  // ---- Checker (planner/checker.py), re-reads the raw record by id ----
+  function checkPlan(stops, req, catalog) {
+    var out = [], seen = {}, prev = null, total = 0;
+    stops.forEach(function (s, i) {
+      var b = catalog[s.p.id];
+      if (!b) { out.push([i, "record_exists", s.p.name + " is not in the data"]); prev = s; return; }
+      if (seen[b.id]) out.push([i, "duplicate", b.name + " is visited twice"]);
+      seen[b.id] = true;
+      if (placeUrl(s.p) !== placeUrl(b)) out.push([i, "traceability", "link does not match the record"]);
+      if (s.start < req.startMin || s.end > req.endMin) out.push([i, "within_day", b.name + " is outside the day window"]);
+      if (s.end - s.start !== VISIT_MINUTES[s.interest]) out.push([i, "duration", b.name + " visit length is wrong"]);
+      var parsed = parseDayHours(b.hours[req.day]);
+      if (parsed === null) out.push([i, "hours_unknown", "no recorded hours for " + b.name + " on " + req.day]);
+      else if (!isOpen(parsed, s.start, s.end)) out.push([i, "open_hours", b.name + " is not open for the whole visit"]);
+      var origin = prev ? [prev.p.lat, prev.p.lon] : req.anchor;
+      var depart = prev ? prev.end : req.startMin;
+      var needed = Math.ceil(travelMinutes(origin[0], origin[1], b.lat, b.lon));
+      if (s.start < depart + needed) out.push([i, "travel_time", "not enough travel time to reach " + b.name]);
+      total += estimateCost(b).cost;
+      prev = s;
+    });
+    if (total > req.budget) out.push([null, "budget", "estimated total $" + total + " is over budget $" + req.budget]);
+    return out;
+  }
+
+  function planWithChecks(places, catalog, req) {
+    var exclude = {}, attempts = [];
+    for (var n = 1; n <= MAX_ATTEMPTS; n++) {
+      var stops = buildPlan(places, req, exclude);
+      if (!stops.length) { attempts.push({ n: n, stops: 0, violations: [], note: "no feasible stops with these constraints" }); break; }
+      var violations = checkPlan(stops, req, catalog);
+      attempts.push({ n: n, stops: stops.length, violations: violations });
+      if (!violations.length) return { stops: stops, attempts: attempts };
+      var bad = false;
+      violations.forEach(function (v) { if (v[0] !== null) { exclude[stops[v[0]].p.id] = true; bad = true; } });
+      if (!bad) break;
+    }
+    return { stops: null, attempts: attempts };
+  }
+
+  // ---- Page ----
+  function fmt(m) { m = Math.round(m); var h = Math.floor(m / 60) % 24, mm = m % 60;
+    return (h < 10 ? "0" : "") + h + ":" + (mm < 10 ? "0" : "") + mm; }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function parseTime(v) { var pr = v.split(":"); return parseInt(pr[0], 10) * 60 + parseInt(pr[1], 10); }
+
+  var places = (window.PLACES || []).filter(function (p) {
+    return haversineKm(ANCHOR[0], ANCHOR[1], p.lat, p.lon) <= RADIUS_KM;
+  });
+  var catalog = {}; places.forEach(function (p) { catalog[p.id] = p; });
+
+  var daySel = document.getElementById("day");
+  DAYS.forEach(function (d) { var o = document.createElement("option"); o.textContent = d;
+    if (d === "Saturday") o.selected = true; daySel.appendChild(o); });
+  var box = document.getElementById("interests");
+  INTEREST_NAMES.forEach(function (name) {
+    var l = document.createElement("label");
+    l.innerHTML = '<input type="checkbox" value="' + name + '"' + (name === "food" || name === "culture" ? " checked" : "") + '> ' +
+      name.charAt(0).toUpperCase() + name.slice(1);
+    box.appendChild(l);
+  });
+
+  document.getElementById("form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var interests = Array.prototype.filter.call(box.querySelectorAll("input:checked"), function (x) { return true; })
+      .map(function (x) { return x.value; });
+    var status = document.getElementById("status"), result = document.getElementById("result");
+    if (!interests.length) { status.innerHTML = '<span class="bad">Pick at least one interest.</span>'; result.innerHTML = ""; return; }
+    var req = {
+      day: daySel.value, interests: interests, budget: parseFloat(document.getElementById("budget").value) || 0,
+      startMin: parseTime(document.getElementById("start").value), endMin: parseTime(document.getElementById("end").value),
+      maxStops: parseInt(document.getElementById("maxStops").value, 10), anchor: ANCHOR, radiusKm: RADIUS_KM
+    };
+    var r = planWithChecks(places, catalog, req);
+    var log = r.attempts.map(function (a) {
+      if (a.note) return "attempt " + a.n + ": " + a.note;
+      if (a.violations.length) return "attempt " + a.n + ": " + a.violations.length + " violation(s)\n" +
+        a.violations.map(function (v) { return "    - [" + v[1] + "] " + v[2]; }).join("\n");
+      return "attempt " + a.n + ": " + a.stops + " stop(s), all checks passed";
+    }).join("\n");
+
+    if (!r.stops) {
+      status.innerHTML = '<span class="bad">No checked plan found. Try more interests, a bigger budget, or a later end time.</span>';
+      result.innerHTML = '<div class="panel"><h2>Checker log</h2><pre class="log">' + esc(log) + '</pre></div>';
+      return;
+    }
+    var total = r.stops.reduce(function (t, s) { return t + s.cost; }, 0);
+    status.innerHTML = '<span class="ok">Checked plan for ' + esc(req.day) + '.</span>';
+    var html = r.stops.map(function (s, i) {
+      var p = s.p;
+      return '<div class="stop"><div class="stop-head"><div><span class="time">' + fmt(s.start) + '–' + fmt(s.end) +
+        '</span>&nbsp; <span class="stop-name">' + esc(p.name) + '</span></div><span class="tag">' + esc(s.interest) + '</span></div>' +
+        '<div class="meta"><div>' + esc(p.address) + '</div>' +
+        '<div>Travel ' + s.travel + ' min · est. $' + s.cost + ' (' + esc(s.source) + ') · rating ' + p.rating + ' (' + p.n + ' reviews)</div>' +
+        '<div>Hours on ' + esc(req.day) + ': ' + esc(p.hours[req.day]) + '</div>' +
+        '<div><a href="' + esc(placeUrl(p)) + '" target="_blank" rel="noopener">Google Maps record</a></div></div></div>';
+    }).join("");
+    html += '<div class="total">Estimated total: $' + total + ' of $' + req.budget + ' budget</div>';
+    html += '<div class="panel"><h2>Checker log</h2><pre class="log">' + esc(log) + '</pre></div>';
+    result.innerHTML = html;
+  });
+  // Show a plan for the default settings on load
+  document.getElementById("form").dispatchEvent(new Event("submit", { cancelable: true }));
+})();
+</script>
+</body>
+</html>

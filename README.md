@@ -94,6 +94,21 @@ Options: `--day`, `--interests` (comma list), `--budget` (USD per person), `--st
 (24-hour HH:MM), `--max-stops`, `--anchor lat,lon` (default: Boston Common), `--radius-km`,
 `--json plan.json`.
 
+### Web page
+
+`web/index.html` is a single file you can open in a browser. It contains the same planning and
+checking rules in JavaScript, plus the Boston-area place data (5,754 places, 2.3 MB), so it needs
+no server. Open it directly, or serve the folder with `python -m http.server` and visit
+`http://127.0.0.1:8000`. The page covers Boston and a 20 km radius only. To rebuild it after changing
+the data or rules:
+
+```bash
+python scripts/export_web_data.py --data data/raw
+```
+
+This writes `web/index.html` from `web/index.template.html`. Check the JavaScript against the Python
+planner after any rule change: for the same request, both should give the same stops and times.
+
 Tests and evaluation:
 
 ```bash
