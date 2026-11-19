@@ -98,7 +98,7 @@ Options: `--day`, `--interests` (comma list), `--budget` (USD per person), `--st
 
 `web/index.html` is a single file you can open in a browser. It contains the same planning and
 checking rules in JavaScript, plus the Boston-area place data (5,754 places, 2.3 MB), so it needs
-no server. Open it directly, or serve the folder with `python -m http.server` and visit
+no server. The map uses Leaflet (cdnjs) and OpenStreetMap tiles, so it needs an internet connection; the plan itself works offline. Open it directly, or serve the folder with `python -m http.server` and visit
 `http://127.0.0.1:8000`. The page covers Boston and a 20 km radius only. To rebuild it after changing
 the data or rules:
 
